@@ -12,8 +12,7 @@ import json
 import pathlib
 
 from core import _call, _log
-
-MANAGED_FIELDS = ("user_feedback", "log")
+from managed_note_types import MANAGED_FIELDS
 
 _CSS = (
     ".card { font-family: arial; font-size: 20px; "
