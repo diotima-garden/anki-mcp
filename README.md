@@ -9,7 +9,7 @@ Claude calls tools directly instead of constructing JSON strings and invoking ba
 ## Package layout
 
 ```
-.claude/anki-mcp/
+anki-mcp/
 ├── server.py       Entry point — sets sys.path, imports core + tools, runs mcp
 ├── launcher.py     Anki process lifecycle (ensure_anki_running)
 ├── core.py         Shared state: mcp instance, _call(), FLAGS, _log

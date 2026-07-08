@@ -1,0 +1,5 @@
+# Python virtual environment (recreate per README setup)
+.venv/
+
+# Runtime logs
+*.log
