@@ -24,6 +24,11 @@ _log_path = pathlib.Path(__file__).resolve().parent / "anki-mcp.log"
 _log = make_logger("server", _log_path)
 _call_log = make_logger("call", _log_path)
 
+# Set by server.py when --managed-config is passed. Fires once before the first
+# AnkiConnect call, then cleared — so bootstrap is skipped for sessions that
+# never invoke any Anki tool.
+_lazy_bootstrap: "callable | None" = None
+
 mcp = FastMCP("anki")
 
 _original_tool = mcp.tool
@@ -42,6 +47,10 @@ mcp.tool = _logging_tool
 
 
 def _call(action: str, **params) -> object:
+    global _lazy_bootstrap
+    if _lazy_bootstrap is not None:
+        fn, _lazy_bootstrap = _lazy_bootstrap, None
+        fn()
     ensure_anki_running()
     payload = {"action": action, "version": 6, "params": params}
     data = json.dumps(payload).encode()
