@@ -1,0 +1,5 @@
+{
+  "name": "anki-mcp",
+  "description": "Anki MCP integration — deck operations, managed note types, feedback-driven card edits",
+  "version": "1.0.0"
+}
