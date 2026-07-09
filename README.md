@@ -9,10 +9,20 @@ Claude calls tools directly instead of constructing JSON strings and invoking ba
 ## Package layout
 
 ```
-anki-mcp/
+plugins/anki-mcp/
+├── .claude-plugin/
+│   └── plugin.json         Plugin manifest — exposes skills/ as anki-mcp:<name>
+├── skills/
+│   ├── process-user-feedback-on-deck/  User-invocable — orchestrates the feedback loop
+│   └── edit-card-batch/                Internal — LLM edit step, called only by the above
 ├── server.py       Entry point — sets sys.path, imports core + tools, runs mcp
 ├── launcher.py     Anki process lifecycle (ensure_anki_running)
 ├── core.py         Shared state: mcp instance, _call(), FLAGS, _log
+├── managed_note_types/
+│   ├── bootstrap.py    Startup: ensures configured note types exist + carry managed fields
+│   └── tools/
+│       ├── feedback.py     extract_feedback — pulls pending user_feedback, sets RED flag
+│       └── edits.py        update_note_fields(_batch) — diff-aware, log-appending override
 └── tools/
     ├── __init__.py     Imports all submodules → triggers @mcp.tool() registration
     ├── cards.py        Card search, metadata, flag ops
@@ -34,140 +44,85 @@ Import `mcp` and `_call` from `core`. Restart Claude Code after any server chang
 
 ## Tools
 
-### Search
+Exposes effectively the full AnkiConnect surface — search, note/card CRUD, tags, flags,
+decks, scheduling, models, media, stats — as native tools instead of JSON strings over
+bash. That part is table stakes; one file per category, listed below with no per-tool
+detail (signatures are self-documenting, see the source). The value-add is what's built
+on top: **aggregation/analytics** (collapsing multi-step roundtrips) and **managed note
+types** (a feedback pipeline with change history) — both covered in full below.
 
-| Tool | What |
-|---|---|
-| `find_cards(query)` | Search cards by raw Anki query. Returns card IDs. |
-| `find_flagged_cards(flag, deck?)` | Find cards by flag name, optionally scoped to a deck. |
-| `find_notes(query)` | Search notes by raw Anki query. Returns note IDs. |
+### Base surface (mirrors AnkiConnect 1:1)
 
-### Card & note metadata
+| Category | File | Tools |
+|---|---|---|
+| Search | `cards.py` | `find_cards`, `find_flagged_cards`, `find_notes` |
+| Card & note metadata | `cards.py`, `notes.py` | `cards_info`, `notes_info`, `cards_to_notes` |
+| Note mutations | `notes.py` | `add_notes`, `can_add_notes`, `update_note`, `update_note_model`, `delete_notes`, `remove_empty_notes` |
+| Tags | `tags.py` | `get_tags`, `add_tags`, `remove_tags`, `update_note_tags`, `clear_unused_tags`, `replace_tags_in_all_notes` |
+| Flags | `cards.py` | `set_card_flag` |
+| Decks | `decks.py` | `deck_names`, `deck_stats`, `get_decks`, `create_deck`, `get_deck_config`, `save_deck_config`, `change_deck`, `delete_decks`, `export_deck`, `import_package`, `sync` |
+| Scheduling | `scheduling.py` | `are_suspended`, `are_due`, `get_intervals`, `suspend_cards`, `unsuspend_cards`, `forget_cards`, `relearn_cards`, `answer_cards` |
+| Models | `models.py` | `model_names`, `model_field_names`, `model_templates`, `model_styling`, `rename_model_field`, `add_model_field`, `remove_model_field`, `change_note_type`, `update_model_templates`, `update_model_styling`, `create_model` |
+| Media | `media.py` | `store_media_file`, `retrieve_media_file`, `get_media_files_names`, `get_media_dir_path`, `delete_media_file` |
+| Statistics | `stats.py` | `get_collection_stats`, `card_reviews`, `get_reviews_of_cards`, `get_latest_review_id` |
 
-| Tool | What |
-|---|---|
-| `cards_info(card_ids)` | Full metadata per card — fields, tags, flags, scheduling. |
-| `notes_info(note_ids)` | Full metadata per note — fields, tags, card IDs. |
-| `cards_to_notes(card_ids)` | Convert card IDs → note IDs. |
+One resource is served alongside these: `anki://template-reference` (card template
+syntax and CSS conventions — read before calling `update_model_templates` or
+`update_model_styling`). Access via `ListMcpResourcesTool` / `ReadMcpResourceTool`.
 
-### Note mutations
-
-| Tool | What |
-|---|---|
-| `add_notes(notes)` | Add notes. Each: `{deckName, modelName, fields, tags}`. |
-| `can_add_notes(notes)` | Duplicate check before adding. |
-| `update_note_fields(note_id, fields)` | Update specific fields in-place. |
-| `update_note(note_id, fields?, tags?)` | Atomically update fields and/or tags. |
-| `update_note_model(note_id, model_name, fields, tags?)` | Change a note's type in-place. Preserves card IDs and scheduling. All fields must be supplied — omitted fields are blanked. |
-| `delete_notes(note_ids)` | Permanently delete notes and all their cards. |
-| `remove_empty_notes()` | Remove notes with no cards. |
-
-### Tags
-
-| Tool | What |
-|---|---|
-| `get_tags()` | All tags in the collection. |
-| `add_tags(note_ids, tags)` | Add space-separated tags (preserves existing). |
-| `remove_tags(note_ids, tags)` | Remove space-separated tags. |
-| `update_note_tags(note_id, tags)` | Replace all tags on a note. |
-| `clear_unused_tags()` | Remove tags unused by any note. |
-| `replace_tags_in_all_notes(old, new)` | Rename a tag collection-wide. |
-
-### Flags
-
-| Tool | What |
-|---|---|
-| `set_card_flag(card_id, flag)` | Set flag by name: none/red/orange/green/blue/pink/turquoise/purple. |
-
-### Decks
-
-| Tool | What |
-|---|---|
-| `deck_names()` | All deck names. |
-| `deck_stats(decks)` | New/learn/review/total counts per deck. |
-| `get_decks(card_ids)` | Map deck name → card IDs for given cards. |
-| `create_deck(deck)` | Create a deck. Returns deck ID. |
-| `get_deck_config(deck)` | Deck configuration object. |
-| `save_deck_config(config)` | Save a configuration object. |
-| `change_deck(card_ids, deck)` | Move cards to another deck. |
-| `delete_decks(decks, cards_too?)` | Delete decks (optionally with cards). |
-| `export_deck(deck, path, include_sched?)` | Export to .apkg. |
-| `import_package(path)` | Import an .apkg file. |
-| `sync()` | Trigger AnkiWeb sync (background). |
-
-### Scheduling
-
-| Tool | What |
-|---|---|
-| `are_suspended(card_ids)` | Suspension state per card. |
-| `are_due(card_ids)` | Due state per card. |
-| `get_intervals(card_ids, complete?)` | Current intervals (days). |
-| `suspend_cards(card_ids)` | Exclude cards from review. |
-| `unsuspend_cards(card_ids)` | Restore to review queue. |
-| `forget_cards(card_ids)` | Reset to new. |
-| `relearn_cards(card_ids)` | Move to learning queue. |
-| `answer_cards(answers)` | Simulate review answers `[{cardId, ease}]`. |
-
-### Resources
-
-Read-only data served alongside tools. Access via `ListMcpResourcesTool` (catalog) and `ReadMcpResourceTool` (content).
-
-| URI | What |
-|---|---|
-| `anki://template-reference` | Anki card template syntax and CSS conventions — read before calling `update_model_templates` or `update_model_styling`. |
-
-### Models
-
-| Tool | What |
-|---|---|
-| `model_names()` | All note type names. |
-| `model_field_names(model_name)` | Field names in definition order. |
-| `model_templates(model_name)` | Card template HTML. |
-| `model_styling(model_name)` | Note type CSS. |
-| `rename_model_field(model_name, old, new)` | Rename a field in an existing note type. |
-| `add_model_field(model_name, field_name, index?)` | Add a field to an existing note type. `index` sets insertion position; omit to append. |
-| `remove_model_field(model_name, field_name)` | Remove a field from an existing note type. Field data is permanently lost. |
-| `change_note_type(note_ids, old_model, new_model, field_mapping?, template_mapping?)` | Change the note type of a list of notes. `field_mapping`/`template_mapping` are `{old_name: new_name}`; omit to auto-map by matching names. |
-| `update_model_templates(model_name, templates)` | Update card template HTML for an existing note type. `templates` format: `{"Card 1": {"Front": "...", "Back": "..."}}`. |
-| `update_model_styling(model_name, css)` | Replace the CSS stylesheet for an existing note type. |
-| `create_model(model_name, fields, is_cloze?)` | Create a new note type with default templates. `is_cloze=True` sets cloze template and flag. |
-
-### Media
-
-| Tool | What |
-|---|---|
-| `store_media_file(filename, data?, path?, url?)` | Store a file in Anki's media dir. `url` lets AnkiConnect download directly from a public URL. |
-| `retrieve_media_file(filename)` | Retrieve a file as base64. |
-| `get_media_files_names(pattern?)` | List media files by glob. |
-| `get_media_dir_path()` | Absolute path to media directory. |
-| `delete_media_file(filename)` | Delete a media file. |
-
-### Statistics
-
-| Tool | What |
-|---|---|
-| `get_collection_stats()` | Collection-wide stats as HTML. |
-| `card_reviews(deck, start_id?)` | Raw review log entries. |
-| `get_reviews_of_cards(card_ids)` | Full review history per card. |
-| `get_latest_review_id(deck)` | ID of most recent review (for incremental fetches). |
-
-### Aggregation
-
-Higher-level tools that collapse multi-step roundtrips and return clean, merged objects.
+### Aggregation & analytics — collapse multi-step roundtrips
 
 | Tool | What |
 |---|---|
 | `get_all_notes(deck, include_scheduling?)` | All notes in a deck, fields flattened. Foundation for bulk AI operations. |
 | `get_flagged_notes(deck, flag)` | Flagged notes merged and ready for editing — card_id + flattened fields in one call. |
+| `vocabulary_snapshot(deck)` | Maturity breakdown + weighted vocabulary estimate + sample words. |
+| `learning_velocity(deck, days?)` | Learning rate + 30-day and 365-day projections. |
 
-### Analytics
+### Managed note types — the feedback pipeline
 
-Computed metrics derived from raw AnkiConnect data.
+Note types declared in a project config (`--managed-config <path>` at startup, see
+`.mcp.json`) automatically carry two extra fields, injected by
+`managed_note_types/bootstrap.py` on first tool use (lazy, idempotent, safe every
+startup):
+
+- `user_feedback` — free-text edit instruction the user writes directly on a card in
+  Anki. User-authored only; the server only ever clears it, never sets it.
+- `log` — append-only JSON history of every diffed field change.
+
+Config shape (`groves/managed-models.json` in the monorepo):
+```json
+{
+  "managed_note_types": [
+    {"name": "Production", "fields": ["Front", "Back", "Hint", "Interesting Facts"], "is_cloze": false}
+  ]
+}
+```
+
+**The loop:** user writes an instruction into `user_feedback` in Anki →
+`extract_feedback(deck)` finds it, flags the card RED, returns an edit-ready record →
+an LLM turns the instruction into field edits → `update_note_fields_batch` diffs,
+writes only what changed, appends to `log`, clears `user_feedback`, flips the flag
+RED → GREEN. Orchestrated end-to-end by the `process-user-feedback-on-deck` skill
+(see Skills below).
 
 | Tool | What |
 |---|---|
-| `vocabulary_snapshot(deck)` | Maturity breakdown + weighted vocabulary estimate + sample words. |
-| `learning_velocity(deck, days?)` | Learning rate + 30-day and 365-day projections. |
+| `extract_feedback(deck, output_path?)` | Find notes with pending `user_feedback`; sets RED flag; returns `{note_id, new_fields, model}` records. Optional JSONL append to `output_path` for later batch review. |
+| `update_note_fields(note_id, new_fields)` | Overrides the plain version for managed notes: diffs against current values, writes + logs only what changed, clears `user_feedback` flips RED → GREEN. Plain behavior for non-managed notes. |
+| `update_note_fields_batch(updates)` | Batches the above; continues past per-note failures; returns `{note_id: {"changed": [...]} \| {"error": "..."}}`. |
+
+---
+
+## Skills
+
+Shipped as a Claude Code plugin (`.claude-plugin/plugin.json`) — when this repo is
+checked out at `plugins/anki-mcp`, its skills load namespaced as `anki-mcp:<name>`.
+
+| Skill | Invocation | What |
+|---|---|---|
+| `process-user-feedback-on-deck` | user-invocable | Orchestrates the feedback loop above end-to-end: extract → LLM edit → confirm → batch apply. Used by the monorepo's `/pipe:anki-process-flags` pipeline. |
+| `edit-card-batch` | internal only | The LLM edit step — turns each record's `user_feedback` into field changes. Invoked only by `process-user-feedback-on-deck`. |
 
 ---
 
