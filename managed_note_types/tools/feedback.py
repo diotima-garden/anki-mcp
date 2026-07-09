@@ -9,7 +9,6 @@ import pathlib
 from datetime import datetime, timezone
 
 from core import mcp, _call, _log, FLAGS
-from managed_note_types import MANAGED_FIELDS
 
 
 def extract_feedback_records(deck: str) -> list[dict]:
@@ -17,7 +16,9 @@ def extract_feedback_records(deck: str) -> list[dict]:
     Find all notes in `deck` with non-empty `user_feedback`.
 
     Side effect: sets RED flag on every card belonging to a matched note (D2).
-    Returns a list of records; empty list if no matches.
+    Returns one rich record per matched note; empty list if no matches.
+    `new_fields` carries every note field except `log` — `user_feedback` (non-empty
+    by the filter) stays in place like any other field, never special-cased.
     """
     note_ids: list[int] = _call("findNotes", query=f'deck:"{deck}"')
     if not note_ids:
@@ -27,26 +28,24 @@ def extract_feedback_records(deck: str) -> list[dict]:
 
     records = []
     for info in infos:
-        feedback = info["fields"].get("user_feedback", {}).get("value", "").strip()
-        if not feedback:
+        if not info["fields"].get("user_feedback", {}).get("value", "").strip():
             continue
 
         card_ids: list[int] = info.get("cards", [])
         for cid in card_ids:
             _call("setSpecificValueOfCard", card=cid, keys=["flags"], newValues=[FLAGS["red"]])
 
-        domain_fields = {
+        new_fields = {
             name: fdata["value"]
             for name, fdata in info["fields"].items()
-            if name not in MANAGED_FIELDS
+            if name != "log"
         }
 
         records.append({
             "note_id": info["noteId"],
             "card_ids": card_ids,
             "model": info["modelName"],
-            "fields": domain_fields,
-            "user_feedback": feedback,
+            "new_fields": new_fields,
             "tags": info["tags"],
             "extracted_at": datetime.now(timezone.utc).isoformat(),
         })
@@ -62,15 +61,21 @@ def extract_feedback(deck: str, output_path: str | None = None) -> list[dict]:
 
     For each matched note:
       - Sets RED flag on all its cards (visual convenience, D2).
-      - Emits a record: {note_id, card_ids, model, fields, user_feedback, tags, extracted_at}.
+      - Returns a record: {note_id, new_fields, model}. `new_fields` carries every
+        note field except `log` — domain fields (empty ones included) and the
+        pending `user_feedback` text. `model` is advisory context for the editor.
+
+    The return shape is deliberately the input shape of update_note_fields_batch:
+    once an editing step blanks `user_feedback` (and edits domain fields), records
+    pass straight through. A record piped through *unprocessed* is rejected there,
+    because its `user_feedback` is still non-empty — failures are loud, never silent.
 
     `deck` is required. Missing deck raises ValueError.
 
-    If `output_path` is provided, each record is appended as a JSON line (JSONL)
-    to that file — never overwritten. Accumulates feedback across runs so that
-    a later refine-context pass can process them in batch.
-
-    Return value is always the full list of matched records (used directly by red-edit).
+    If `output_path` is provided, a rich record per note — the return record plus
+    {card_ids, tags, extracted_at} — is appended as a JSON line (JSONL), never
+    overwritten. Accumulates feedback across runs so that a later refine-context
+    pass can process them in batch.
     """
     if not deck:
         raise ValueError("deck is required")
@@ -84,4 +89,7 @@ def extract_feedback(deck: str, output_path: str | None = None) -> list[dict]:
                 fh.write(json.dumps(record, ensure_ascii=False) + "\n")
         _log(f"extract_feedback: appended {len(records)} records to {output_path}")
 
-    return records
+    return [
+        {"note_id": r["note_id"], "new_fields": r["new_fields"], "model": r["model"]}
+        for r in records
+    ]
