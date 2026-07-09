@@ -91,10 +91,13 @@ def update_note_fields(note_id: int, new_fields: dict) -> None:
     _update_note_fields(note_id, new_fields)
 
 
-@mcp.tool()
 def update_note_fields_batch(updates: list[dict]) -> dict:
     """
     Apply update_note_fields to many notes in one call.
+
+    Not an MCP tool — called only by skills/process-user-feedback-on-deck/apply.py (a
+    skill-local CLI). Kept out of the tool list: it has exactly one caller and would
+    otherwise sit in every session's context for no benefit.
 
     `updates` is a list of {"note_id": int, "new_fields": dict}, same semantics as
     update_note_fields per item (any subset of fields; unchanged values are ignored).

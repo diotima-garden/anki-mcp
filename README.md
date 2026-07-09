@@ -14,15 +14,17 @@ plugins/anki-mcp/
 │   └── plugin.json         Plugin manifest — exposes skills/ as anki-mcp:<name>
 ├── skills/
 │   ├── process-user-feedback-on-deck/  User-invocable — orchestrates the feedback loop
+│   │   ├── extract.py                  CLI — finds pending feedback, writes edit-input file
+│   │   └── apply.py                    CLI — applies confirmed edits, clears user_feedback
 │   └── edit-card-batch/                Internal — LLM edit step, called only by the above
 ├── server.py       Entry point — sets sys.path, imports core + tools, runs mcp
 ├── launcher.py     Anki process lifecycle (ensure_anki_running)
 ├── core.py         Shared state: mcp instance, _call(), FLAGS, _log
 ├── managed_note_types/
 │   ├── bootstrap.py    Startup: ensures configured note types exist + carry managed fields
+│   ├── feedback.py     extract_feedback_records — pulls pending user_feedback, sets RED flag
 │   └── tools/
-│       ├── feedback.py     extract_feedback — pulls pending user_feedback, sets RED flag
-│       └── edits.py        update_note_fields(_batch) — diff-aware, log-appending override
+│       └── edits.py    update_note_fields(_batch) — diff-aware, log-appending override
 └── tools/
     ├── __init__.py     Imports all submodules → triggers @mcp.tool() registration
     ├── cards.py        Card search, metadata, flag ops
@@ -100,17 +102,20 @@ Config shape (`groves/managed-models.json` in the monorepo):
 ```
 
 **The loop:** user writes an instruction into `user_feedback` in Anki →
-`extract_feedback(deck)` finds it, flags the card RED, returns an edit-ready record →
-an LLM turns the instruction into field edits → `update_note_fields_batch` diffs,
-writes only what changed, appends to `log`, clears `user_feedback`, flips the flag
-RED → GREEN. Orchestrated end-to-end by the `process-user-feedback-on-deck` skill
-(see Skills below).
+`extract.py` finds it, flags the card RED, writes an edit-ready record to a static
+file → an LLM turns the instruction into field edits → `apply.py` diffs, writes only
+what changed, appends to `log`, clears `user_feedback`, flips the flag RED → GREEN.
+Orchestrated end-to-end by the `process-user-feedback-on-deck` skill (see Skills
+below).
+
+`extract_feedback_records` and `update_note_fields_batch` are **not MCP tools** —
+each has exactly one caller (the skill's CLI scripts), so they're plain functions
+kept off the always-loaded tool list. `update_note_fields` stays a tool since it's
+useful ad hoc, outside the pipeline.
 
 | Tool | What |
 |---|---|
-| `extract_feedback(deck, output_path?)` | Find notes with pending `user_feedback`; sets RED flag; returns `{note_id, new_fields, model}` records. Optional JSONL append to `output_path` for later batch review. |
 | `update_note_fields(note_id, new_fields)` | Overrides the plain version for managed notes: diffs against current values, writes + logs only what changed, clears `user_feedback` flips RED → GREEN. Plain behavior for non-managed notes. |
-| `update_note_fields_batch(updates)` | Batches the above; continues past per-note failures; returns `{note_id: {"changed": [...]} \| {"error": "..."}}`. |
 
 ---
 
@@ -121,7 +126,7 @@ checked out at `plugins/anki-mcp`, its skills load namespaced as `anki-mcp:<name
 
 | Skill | Invocation | What |
 |---|---|---|
-| `process-user-feedback-on-deck` | user-invocable | Orchestrates the feedback loop above end-to-end: extract → LLM edit → confirm → batch apply. Used by the monorepo's `/pipe:anki-process-flags` pipeline. |
+| `process-user-feedback-on-deck` | user-invocable | Orchestrates the feedback loop above end-to-end: extract.py → LLM edit → confirm → apply.py. Used by the monorepo's `/pipe:anki-process-flags` pipeline. |
 | `edit-card-batch` | internal only | The LLM edit step — turns each record's `user_feedback` into field changes. Invoked only by `process-user-feedback-on-deck`. |
 
 ---
