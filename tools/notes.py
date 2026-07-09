@@ -28,21 +28,9 @@ def can_add_notes(notes: list[dict]) -> list[bool]:
     return _call("canAddNotes", notes=notes)
 
 
-@mcp.tool()
-def update_note_fields(note_id: int, fields: dict) -> None:
-    """
-    Update one or more fields on an existing note in-place.
-
-    Supply only the fields you want to change — omitted fields are untouched.
-
-    Examples:
-      Basic card:  fields={"Front": "new question", "Back": "new answer"}
-      Cloze card:  fields={"Text": "{{c1::new cloze}}", "Back Extra": "hint"}
-
-    Field names must match the note's model exactly (case-sensitive).
-    """
-    _log(f"update_note_fields: note_id={note_id}, fields={list(fields)}")
-    _call("updateNoteFields", note={"id": note_id, "fields": fields})
+# update_note_fields lives in managed_note_types/tools/edits.py — it supersedes the plain
+# version that used to be here, adding transparent log/flag handling for managed note types
+# while behaving identically to this for everything else.
 
 
 @mcp.tool()
