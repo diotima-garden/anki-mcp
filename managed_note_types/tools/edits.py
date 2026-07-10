@@ -80,9 +80,9 @@ def update_note_fields(note_id: int, new_fields: dict) -> None:
     separate logging call needed. Non-managed notes are updated plainly, unchanged from
     the old behavior.
 
-    To process a card's feedback, include `"user_feedback": ""` in new_fields alongside
-    the domain field changes. If the note's feedback was already empty this is a no-op
-    for that field; if it was non-empty, clearing it is diffed into the log like any other
+    To process a card's feedback, include `"user_feedback": ""` alongside the domain
+    field changes. If the note's feedback was already empty this is a no-op for that
+    field; if it was non-empty, clearing it is diffed into the log like any other
     change and flips the note's cards from RED to GREEN.
 
     user_feedback may only ever be cleared this way — its new value must be "". This field
@@ -99,7 +99,7 @@ def update_note_fields_batch(updates: list[dict]) -> dict:
     skill-local CLI). Kept out of the tool list: it has exactly one caller and would
     otherwise sit in every session's context for no benefit.
 
-    `updates` is a list of {"note_id": int, "new_fields": dict}, same semantics as
+    `updates` is a list of {"note_id": int, "fields": dict}, same semantics as
     update_note_fields per item (any subset of fields; unchanged values are ignored).
 
     Continues past per-note failures rather than aborting the batch — a bad note_id
@@ -112,7 +112,7 @@ def update_note_fields_batch(updates: list[dict]) -> dict:
     for update in updates:
         note_id = update["note_id"]
         try:
-            changed = _update_note_fields(note_id, update["new_fields"])
+            changed = _update_note_fields(note_id, update["fields"])
             results[str(note_id)] = {"changed": changed}
         except Exception as e:
             results[str(note_id)] = {"error": str(e)}

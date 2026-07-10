@@ -4,8 +4,8 @@ description: Find cards with pending feedback and apply edit instructions
 disable-model-invocation: false
 ---
 
-Find all cards with non-empty `user_feedback` in a deck, apply the feedback as an edit, then
-clear it (which flips the flag to GREEN). This skill only directs the flow.
+Find all cards with non-empty `user_feedback` in a deck, apply the feedback as an edit.
+This skill only directs the flow.
 
 **Usage:** `/anki-mcp:process-user-feedback-on-deck <context file path> <ankiDeckName>`
 
@@ -15,27 +15,27 @@ clear it (which flips the flag to GREEN). This skill only directs the flow.
 plugins/anki-mcp/.venv/bin/python3 plugins/anki-mcp/skills/process-user-feedback-on-deck/extract.py "<ankiDeckName>" "<context file path>.feedback.jsonl"
 ```
 
-Read `/tmp/anki-mcp-feedback-edit-input.json`. If it's `[]`: report "No cards with pending
-feedback found in <ankiDeckName>." and stop.
+- in case of a **non-zero exit / failed call** = genuine error (usage or exception). Stop the execution.
 
 ## Edit
 
-Invoke `/anki-mcp:edit-card-batch` with `<context file path>` as `$ARGUMENTS`.
+```bash
+plugins/anki-mcp/.venv/bin/python3 plugins/anki-mcp/skills/process-user-feedback-on-deck/edit.py "<context file path>"
+```
+
+edit.py internally calls an LLM to apply each card's `user_feedback` and writes the
+changed fields itself. A **non-zero exit** = genuine error (usage, LLM failure, or output
+that failed validation). Stop the execution.
 
 ## Confirm
 
-Read `/tmp/anki-mcp-feedback-edit-input.json` (old values, `fields`) and
-`/tmp/anki-mcp-feedback-edit-output.json` (new values, `new_fields`). Show each proposed
-change, one numbered entry per record:
-
-```
-N. [first-field snippet]
-   feedback: "<fields.user_feedback from edit-input>"
-   <field>: "<old value>" → "<new value>"
-   <field>: "<old value>" → "<new value>"
+```bash
+plugins/anki-mcp/.venv/bin/python3 plugins/anki-mcp/skills/process-user-feedback-on-deck/confirm.py
 ```
 
-List every changed field.
+confirm.py prints the proposed changes, one numbered entry per record (first field, the
+`user_feedback` instruction, and each changed field as `old → new`, with the record's
+`note_id`). Show that output to the user verbatim.
 
 Ask: **"Apply these N change(s)? [yes / no]"** Note the `note_id` of any skipped entries.
 

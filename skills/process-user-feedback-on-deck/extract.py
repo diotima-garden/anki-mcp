@@ -3,11 +3,14 @@
 CLI entrypoint for process-user-feedback-on-deck's Extract step.
 
 Finds pending user_feedback in `deck`, RED-flags matches, and writes edit-ready
-records straight to the static edit-input file for edit-card-batch to read — the
+records straight to the static edit-input file for edit.py to read — the
 record payload (full field values, HTML, accented text) never round-trips through
-the orchestrator's context. The orchestrator checks the outcome by reading
-EDIT_INPUT_PATH itself (empty list = nothing pending), same as it already does for
-Confirm — no stdout contract to keep in sync.
+the orchestrator's context.
+
+A single stdout line is the orchestrator's signal (leading token is stable):
+  EXTRACTED <n> …       — n pending-feedback cards extracted; proceed to Edit
+  NO_PENDING_FEEDBACK … — deck has no pending feedback; report and stop (exit 0, not an error)
+Genuine errors exit non-zero (usage, unhandled exception) so the tool call itself fails.
 
 Usage: python3 extract.py <deck> [jsonl_output_path]
 """
@@ -26,6 +29,7 @@ from managed_note_types.feedback import extract_feedback_records  # noqa: E402
 def main() -> int:
     if len(sys.argv) < 2:
         _log("extract.py: missing required <deck> argument")
+        print("USAGE_ERROR: missing required <deck> argument", file=sys.stderr)
         return 2
 
     deck = sys.argv[1]
@@ -41,13 +45,17 @@ def main() -> int:
         _log(f"extract.py: appended {len(records)} records to {jsonl_path}")
 
     edit_input = [
-        {"note_id": r["note_id"], "fields": r["new_fields"], "model": r["model"]}
+        {"note_id": r["note_id"], "fields": r["fields"], "model": r["model"]}
         for r in records
     ]
     EDIT_INPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     EDIT_INPUT_PATH.write_text(json.dumps(edit_input, ensure_ascii=False), encoding="utf-8")
     _log(f"extract.py: wrote {len(edit_input)} records to {EDIT_INPUT_PATH}")
 
+    if edit_input:
+        print(f"EXTRACTED {len(edit_input)} pending-feedback card(s) — proceed to Edit")
+    else:
+        print(f"NO_PENDING_FEEDBACK — no cards with pending feedback in {deck!r}. Stop and report this.")
     return 0
 
 

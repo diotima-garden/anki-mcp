@@ -7,3 +7,6 @@ __pycache__/
 
 # Runtime logs
 *.log
+
+# Pipeline handoff artifacts (feedback edit-input/output JSON)
+.artifacts/

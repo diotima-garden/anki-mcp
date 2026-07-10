@@ -17,8 +17,9 @@ def extract_feedback_records(deck: str) -> list[dict]:
 
     Side effect: sets RED flag on every card belonging to a matched note (D2).
     Returns one rich record per matched note; empty list if no matches.
-    `new_fields` carries every note field except `log` — `user_feedback` (non-empty
-    by the filter) stays in place like any other field, never special-cased.
+    Each record carries the current value of every note field except `log` —
+    `user_feedback` (non-empty by the filter) stays in place like any other field,
+    never special-cased.
     """
     note_ids: list[int] = _call("findNotes", query=f'deck:"{deck}"')
     if not note_ids:
@@ -35,7 +36,7 @@ def extract_feedback_records(deck: str) -> list[dict]:
         for cid in card_ids:
             _call("setSpecificValueOfCard", card=cid, keys=["flags"], newValues=[FLAGS["red"]])
 
-        new_fields = {
+        fields = {
             name: fdata["value"]
             for name, fdata in info["fields"].items()
             if name != "log"
@@ -45,7 +46,7 @@ def extract_feedback_records(deck: str) -> list[dict]:
             "note_id": info["noteId"],
             "card_ids": card_ids,
             "model": info["modelName"],
-            "new_fields": new_fields,
+            "fields": fields,
             "tags": info["tags"],
             "extracted_at": datetime.now(timezone.utc).isoformat(),
         })

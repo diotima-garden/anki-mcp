@@ -13,10 +13,11 @@ plugins/anki-mcp/
 ├── .claude-plugin/
 │   └── plugin.json         Plugin manifest — exposes skills/ as anki-mcp:<name>
 ├── skills/
-│   ├── process-user-feedback-on-deck/  User-invocable — orchestrates the feedback loop
-│   │   ├── extract.py                  CLI — finds pending feedback, writes edit-input file
-│   │   └── apply.py                    CLI — applies confirmed edits, clears user_feedback
-│   └── edit-card-batch/                Internal — LLM edit step, called only by the above
+│   └── process-user-feedback-on-deck/  User-invocable — orchestrates the feedback loop
+│       ├── extract.py                  CLI — finds pending feedback, writes edit-input file
+│       ├── edit.py                     CLI — drives a claude -p edit, writes edit-output file
+│       ├── confirm.py                  CLI — prints the proposed diff for user approval
+│       └── apply.py                    CLI — applies confirmed edits, clears user_feedback
 ├── server.py       Entry point — sets sys.path, imports core + tools, runs mcp
 ├── launcher.py     Anki process lifecycle (ensure_anki_running)
 ├── core.py         Shared state: mcp instance, _call(), FLAGS, _log
@@ -126,8 +127,7 @@ checked out at `plugins/anki-mcp`, its skills load namespaced as `anki-mcp:<name
 
 | Skill | Invocation | What |
 |---|---|---|
-| `process-user-feedback-on-deck` | user-invocable | Orchestrates the feedback loop above end-to-end: extract.py → LLM edit → confirm → apply.py. Used by the monorepo's `/pipe:anki-process-flags` pipeline. |
-| `edit-card-batch` | internal only | The LLM edit step — turns each record's `user_feedback` into field changes. Invoked only by `process-user-feedback-on-deck`. |
+| `process-user-feedback-on-deck` | user-invocable | Orchestrates the feedback loop above end-to-end: extract.py → edit.py (drives a `claude -p` edit) → confirm.py → apply.py. Used by the monorepo's `/pipe:anki-process-flags` pipeline. |
 
 ---
 
