@@ -33,7 +33,7 @@ _anki_mcp_root = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_anki_mcp_root))
 
 from core import _call, _log  # noqa: E402
-from managed_note_types import EDIT_INPUT_PATH, EDIT_OUTPUT_PATH  # noqa: E402
+from managed_note_types import EDIT_INPUT_PATH, EDIT_OUTPUT_PATH, feedback_log_path  # noqa: E402
 
 DECK = "zz-test-feedback"
 MODEL = "Production"
@@ -112,7 +112,7 @@ def main() -> int:
     test_context.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, test_context)
     for stale in (
-        test_context.with_name(test_context.name + ".feedback.jsonl"),
+        feedback_log_path(test_context),
         EDIT_INPUT_PATH,
         EDIT_OUTPUT_PATH,
     ):

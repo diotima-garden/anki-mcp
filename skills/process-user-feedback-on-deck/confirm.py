@@ -7,8 +7,8 @@ handoff files and prints a numbered, human-readable diff to stdout for the orche
 to show the user before applying. The artifact paths stay out of the skill markdown —
 they are resolved in the module, not hardcoded in prose.
 
-Each record prints its note_id so the orchestrator can map a skipped entry back to the
-note_id argument it passes to apply.py.
+Each record prints its note_id so the orchestrator can identify which entries the user
+skips.
 
 Usage: python3 confirm.py
 """
@@ -34,10 +34,16 @@ def main() -> int:
         new_fields = rec["fields"]
         first_field = next(iter(old.values()), "")
         print(f"{i}. {first_field}  (note {note_id})")
-        print(f'   feedback: "{old.get("user_feedback", "")}"')
+        for field, value in old.items():
+            if field == "user_feedback":
+                continue
+            print(f'   {field}: "{value}"')
+
+
+        print(f'\n   feedback: "{old.get("user_feedback", "")}"')
         if new_fields:
             for field, new_val in new_fields.items():
-                print(f'   {field}: "{old.get(field, "")}" → "{new_val}"')
+                print(f'   → {field}: "{old.get(field, "")}" → "{new_val}"')
         else:
             print("   (no field change)")
         print()

@@ -10,7 +10,7 @@ deterministic Python, so this step is driven from Python too:
   - reads the edit-input records (note_id + full field map incl. `user_feedback`)
   - reads the deck's compiled editing guidelines (the context file path argument)
   - asks a fresh, context-free `claude -p` to return ONLY the changed fields, as JSON
-    on stdout (via utils.call_isolated, which pipes the prompt over stdin so a large
+    on stdout (via utils llm call, which pipes the prompt over stdin so a large
     compiled context isn't capped by the 128 KiB argv limit)
   - validates the returned JSON against the input note_ids and writes edit-output
 

@@ -3,14 +3,15 @@
 CLI entrypoint for process-user-feedback-on-deck's Apply step.
 
 Reads the edit-output file written by edit.py, drops any note_ids the user skipped in
-Confirm, applies the rest via update_note_fields_batch, and prints the per-note results
-as JSON on stdout for the orchestrator's Report step.
+Confirm (passed via --skip), applies the rest via update_note_fields_batch, and prints
+the per-note results as JSON on stdout for the orchestrator's Report step.
 
 Clearing `user_feedback` is what "applied" means, so this script sets it on every
 surviving entry itself — edit.py never needs to emit it.
 
-Usage: python3 apply.py [skip_note_id ...]
+Usage: python3 apply.py [--skip note_id ...]
 """
+import argparse
 import json
 import pathlib
 import sys
@@ -24,7 +25,17 @@ from managed_note_types.tools.edits import update_note_fields_batch  # noqa: E40
 
 
 def main() -> int:
-    skip_ids = {int(x) for x in sys.argv[1:]}
+    parser = argparse.ArgumentParser(description="Apply confirmed feedback edits.")
+    parser.add_argument(
+        "--skip",
+        type=int,
+        nargs="*",
+        default=[],
+        metavar="note_id",
+        help="note_ids the user chose not to apply; the rest are written.",
+    )
+    args = parser.parse_args()
+    skip_ids = set(args.skip)
 
     updates = json.loads(EDIT_OUTPUT_PATH.read_text(encoding="utf-8"))
     updates = [u for u in updates if u["note_id"] not in skip_ids]

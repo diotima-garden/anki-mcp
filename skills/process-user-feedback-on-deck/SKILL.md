@@ -12,7 +12,7 @@ This skill only directs the flow.
 ## Extract
 
 ```bash
-plugins/anki-mcp/.venv/bin/python3 plugins/anki-mcp/skills/process-user-feedback-on-deck/extract.py "<ankiDeckName>" "<context file path>.feedback.jsonl"
+plugins/anki-mcp/.venv/bin/python3 plugins/anki-mcp/skills/process-user-feedback-on-deck/extract.py "<ankiDeckName>" "<context file path>"
 ```
 
 - in case of a **non-zero exit / failed call** = genuine error (usage or exception). Stop the execution.
@@ -42,8 +42,11 @@ Ask: **"Apply these N change(s)? [yes / no]"** Note the `note_id` of any skipped
 ## Apply
 
 ```bash
-plugins/anki-mcp/.venv/bin/python3 plugins/anki-mcp/skills/process-user-feedback-on-deck/apply.py <skipped note_id ...>
+plugins/anki-mcp/.venv/bin/python3 plugins/anki-mcp/skills/process-user-feedback-on-deck/apply.py --skip <skipped note_id ...>
 ```
+
+Pass the `note_id`s the user skipped after `--skip`; everything else is applied. If
+nothing was skipped, omit `--skip` entirely.
 
 ## Report
 

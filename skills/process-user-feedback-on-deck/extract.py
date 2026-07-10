@@ -2,17 +2,17 @@
 """
 CLI entrypoint for process-user-feedback-on-deck's Extract step.
 
-Finds pending user_feedback in `deck`, RED-flags matches, and writes edit-ready
-records straight to the static edit-input file for edit.py to read — the
-record payload (full field values, HTML, accented text) never round-trips through
-the orchestrator's context.
+Finds pending user_feedback in `deck`, RED-flags matches, and writes two sinks:
+EDIT_INPUT_PATH (transient handoff for edit.py, overwritten) and, next to the given
+context file, the append-only `<context>.feedback.jsonl` audit log — see
+managed_note_types.feedback_log_path for the shape/lifecycle split.
 
-A single stdout line is the orchestrator's signal (leading token is stable):
-  EXTRACTED <n> …       — n pending-feedback cards extracted; proceed to Edit
-  NO_PENDING_FEEDBACK … — deck has no pending feedback; report and stop (exit 0, not an error)
-Genuine errors exit non-zero (usage, unhandled exception) so the tool call itself fails.
+Stdout's leading token is the orchestrator's signal:
+  EXTRACTED <n> …       — proceed to Edit
+  NO_PENDING_FEEDBACK … — report and stop (exit 0, not an error)
+Genuine errors exit non-zero (usage, unhandled exception).
 
-Usage: python3 extract.py <deck> [jsonl_output_path]
+Usage: python3 extract.py <deck> [context-file-path]
 """
 import json
 import pathlib
@@ -22,7 +22,7 @@ _anki_mcp_root = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_anki_mcp_root))
 
 from core import _log  # noqa: E402
-from managed_note_types import EDIT_INPUT_PATH  # noqa: E402
+from managed_note_types import EDIT_INPUT_PATH, feedback_log_path  # noqa: E402
 from managed_note_types.feedback import extract_feedback_records  # noqa: E402
 
 
@@ -33,16 +33,16 @@ def main() -> int:
         return 2
 
     deck = sys.argv[1]
-    jsonl_path = sys.argv[2] if len(sys.argv) > 2 else None
+    context_path = sys.argv[2] if len(sys.argv) > 2 else None
 
     records = extract_feedback_records(deck)
 
-    if jsonl_path and records:
-        p = pathlib.Path(jsonl_path)
-        with p.open("a", encoding="utf-8") as fh:
+    if context_path and records:
+        log_path = feedback_log_path(context_path)
+        with log_path.open("a", encoding="utf-8") as fh:
             for record in records:
                 fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-        _log(f"extract.py: appended {len(records)} records to {jsonl_path}")
+        _log(f"extract.py: appended {len(records)} records to {log_path}")
 
     edit_input = [
         {"note_id": r["note_id"], "fields": r["fields"], "model": r["model"]}
