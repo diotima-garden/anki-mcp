@@ -5,14 +5,22 @@ Reads a JSON config (path passed via --managed-config at server startup) and ens
   - Each declared note type exists in the collection (creates it if not).
   - Each existing note type has the managed fields appended.
 
-Managed fields (user_feedback, log) are never referenced in card templates — they are
-data fields only. Templates are built from domain fields exclusively.
+Templates are built from domain fields; managed fields (user_feedback, log) carry no
+domain content of their own. They may, however, be referenced by managed rendering
+fragments (styling_infrastructure) — e.g. the feedback marker conditions on
+user_feedback to surface a bottom-left apple. Such references are owned by the fragment
+registry, injected here after fields exist, not authored into base templates by hand.
+
+Deliberately does not call sync: schema changes force a full one-way sync, which can
+pop a blocking Upload/Download dialog in the Anki GUI. Pushing that is left to the
+caller's own sync step (pipelines bookend Anki-touching work with mcp__anki__sync).
 """
 import json
 import pathlib
 
 from core import _call, _log
 from managed_note_types import MANAGED_FIELDS
+from managed_note_types.styling_infrastructure.enrich import enrich_model
 
 _CSS = (
     ".card { font-family: arial; font-size: 20px; "
@@ -74,5 +82,9 @@ def run(config_path: str) -> None:
                 if field not in existing_fields:
                     _log(f"managed-note-types: adding '{field}' to '{name}'")
                     _call("modelFieldAdd", modelName=name, fieldName=field)
+
+        # Managed rendering fragments (e.g. the feedback marker) run after fields exist,
+        # since they reference managed fields. Idempotent; writes only on change.
+        enrich_model(name, spec)
 
     _log("managed-note-types: bootstrap complete")
