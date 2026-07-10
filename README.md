@@ -131,6 +131,50 @@ checked out at `plugins/anki-mcp`, its skills load namespaced as `anki-mcp:<name
 
 ---
 
+## Example: feedback loop in action
+
+A `/pipe:anki-process-flags` run on the Spanish deck — 18 cards carrying pending
+`user_feedback` get extracted and edited in one pass. To make it concrete, here's one
+card's journey through the whole run. It started out plain:
+
+```
+Front:         Nevertheless / However (starting a contrasting sentence)
+Back:          Sin embargo, …
+user_feedback: [consider adding small or putting it into a small phrase. A
+                philosophical one from Plato's alcibiades for example]
+```
+
+The pipeline kicks off — sync, resolve the deck, back it up, extract the 18 cards
+carrying pending feedback (this one included):
+
+![Pipeline kickoff: syncing, resolving the deck, backing up, extracting pending feedback](assets/feedback-01-invoke.png)
+
+`confirm.py` prints every proposed edit — instruction alongside the before/after diff —
+before anything touches the collection. Entry 17 below is our card, mid-run: the
+instruction has been turned into a Plato quote appended to `Back`, front left untouched
+for now:
+
+![confirm.py showing the proposed edit: a Plato quote added to the card's back field](assets/feedback-02-confirm.png)
+
+That partial edit isn't quite right — the front doesn't give any hint of the new Spanish
+example, so it'd be unguessable in a few months. Along with one other card, this gets a
+follow-up instead of a flat yes — ordinary conversation, not a special mode:
+
+![User declining two of the proposed edits with revised instructions, card 17 among them](assets/feedback-03-override.png)
+
+Both reworked cards get applied by hand with `update_note_fields` — still diffed and
+logged like any other change — and the pipeline finishes with its normal backup/sync
+bookending. Note `1782161468183` below is the same card, front now rewritten to match:
+
+![Manual update_note_fields calls for the two reworked cards, then the pipeline completion summary](assets/feedback-04-applied.png)
+
+The result, rendered live in Anki — this is the card from the top of this section after
+the full round trip: front rewritten, `user_feedback` cleared, flag flipped RED → GREEN:
+
+![The edited card rendered in Anki, showing the reworked front and back](assets/feedback-05-result.png)
+
+---
+
 ## Prompts
 
 Prompts are user-triggered templates that load live Anki data into the conversation as context.
