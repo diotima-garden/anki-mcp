@@ -133,45 +133,45 @@ checked out at `plugins/anki-mcp`, its skills load namespaced as `anki-mcp:<name
 
 ## Example: feedback loop in action
 
-A `/pipe:anki-process-flags` run on the Spanish deck — 18 cards carrying pending
-`user_feedback` get extracted and edited in one pass. To make it concrete, here's one
-card's journey through the whole run. It started out plain:
+A one-line request — `process user feedback on spanish` — is enough to trigger the whole
+loop. No grove path, no deck name, no pipeline invocation spelled out:
 
 ```
-Front:         Nevertheless / However (starting a contrasting sentence)
-Back:          Sin embargo, …
-user_feedback: [consider adding small or putting it into a small phrase. A
-                philosophical one from Plato's alcibiades for example]
+> process user feedback on spanish
 ```
 
-The pipeline kicks off — sync, resolve the deck, back it up, extract the 18 cards
-carrying pending feedback (this one included):
+That plain sentence resolves through `/pipe:tackle-feedback-on-grove`: read the grove's
+`context.md` to find its deck spec, compile it, sync Anki, fuzzy-match the deck name
+(`Español`), back it up, then extract every card carrying pending `user_feedback`:
 
-![Pipeline kickoff: syncing, resolving the deck, backing up, extracting pending feedback](assets/feedback-01-invoke.png)
+![Pipeline kickoff: skill load, context.md read, context compile, and an Anki sync — all triggered by the one-line request](assets/feedback-01-invoke.png)
 
-`confirm.py` prints every proposed edit — instruction alongside the before/after diff —
-before anything touches the collection. Entry 17 below is our card, mid-run: the
-instruction has been turned into a Plato quote appended to `Back`, front left untouched
-for now:
+This run turned up two cards. `confirm.py` prints each one's instruction next to its
+before/after diff before anything touches the collection — a hint field feedback called
+"useless" gets swapped for a more relevant one, and a translation gains a natural,
+in-context example sentence on request:
 
-![confirm.py showing the proposed edit: a Plato quote added to the card's back field](assets/feedback-02-confirm.png)
+```
+1. "He wants a raise, fewer hours, AND more vacation..." (note 1778617822309)
+   Feedback: "hint seems useless" → Hint: "sea" → "chancha"
+2. "You'll feel like laughing with me" (note 1782161468245)
+   Feedback: "show a natural conversation example on the back" → Back gains an example: …
+```
 
-That partial edit isn't quite right — the front doesn't give any hint of the new Spanish
-example, so it'd be unguessable in a few months. Along with one other card, this gets a
-follow-up instead of a flat yes — ordinary conversation, not a special mode:
+The approval gate doesn't require a literal "yes" — ordinary conversational assent works
+just as well:
 
-![User declining two of the proposed edits with revised instructions, card 17 among them](assets/feedback-03-override.png)
+![confirm.py's proposed diffs, followed by the user's approval — "yep, I radiate happiness" — accepted as a go-ahead](assets/feedback-02-confirm.png)
 
-Both reworked cards get applied by hand with `update_note_fields` — still diffed and
-logged like any other change — and the pipeline finishes with its normal backup/sync
-bookending. Note `1782161468183` below is the same card, front now rewritten to match:
+Both edits get applied, the pipeline re-syncs, and the run reports exactly what changed
+and where the backup landed:
 
-![Manual update_note_fields calls for the two reworked cards, then the pipeline completion summary](assets/feedback-04-applied.png)
+![Final report: both cards processed, backup path, and confirmation that changes synced to Anki](assets/feedback-03-report.png)
 
-The result, rendered live in Anki — this is the card from the top of this section after
-the full round trip: front rewritten, `user_feedback` cleared, flag flipped RED → GREEN:
+The result, rendered live in Anki — the "You'll feel like laughing with me" card, back
+now carrying the requested example, flag cleared:
 
-![The edited card rendered in Anki, showing the reworked front and back](assets/feedback-05-result.png)
+![The edited card previewed in Anki's browser, back field showing the appended example sentence](assets/feedback-04-rendered.png)
 
 ---
 
