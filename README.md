@@ -56,6 +56,35 @@ now carrying the requested example, flag cleared:
 
 ![The edited card previewed in Anki's browser, back field showing the appended example sentence](assets/feedback-04-rendered.png)
 
+That was a two-card toy run. Here's the closing report from an actual session working
+through a real backlog — 18 pending-feedback cards on the same deck, each with its own
+instruction:
+
+```
+Pipeline complete. Processed 18 card(s):
+
+1. Not colod, not hot, windy & rains a bit — added interesting fact on rioplatense weather expressions
+2. The Sagrada Familia is over there — moved grammar note from Back to Interesting Facts
+3. I remember that it was a leap in my understanding — added fact on acordar vs acordarse de
+4. Comer un poco para eliminar la sensación de hambre — cleared useless hint
+5. The edge of the pool is very wet. Suddenly, he falls — added está vs este clarification
+6. He's a smooth-talking liar — total con man — front now includes the "don't trust him" context
+7. He was hitting on her all night — front now matches the example on the back
+8. She's completely in her element there — front now matches the example on the back
+9. I was waiting for you and you never showed up — added estaba esperando vs esperaba note
+10. He didn't get anything — he's completely thick — added "in class" to front
+11. I don't know how he ended up with her — added note on "un bagre" staying masculine
+12. Barely anyone showed up — front now includes the empty-concert context
+13. Le agarré la mano a la guitarra — added note on standalone "agarrar" usage in Argentina
+14. "Meh." / "So-so." / "Nothing special." — confirmed it's used in Rioplatense too
+15. I'm going to set the trap... — removed the redundant "voy a" note
+16. After two weeks, the little coati... — fixed front (fifteen days, not two weeks)
+17. Al cabo de quince días... — added the everyday spoken alternative
+18. When someone looks like they just bit into a lemon — expanded with examples and frequency note
+
+Backup saved at groves/languages/spanish/backups/2026-07-23-rosy-fingered-dawn.apkg, deck synced.
+```
+
 The `/pipe:tackle-feedback-on-grove` wrapper (grove context, deck resolution, backup)
 lives in the parent Diotima project. Running anki-mcp standalone, you invoke the
 `anki-mcp:process-user-feedback-on-deck` skill directly (see Skills below).
